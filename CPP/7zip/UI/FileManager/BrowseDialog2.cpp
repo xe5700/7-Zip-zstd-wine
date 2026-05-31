@@ -493,6 +493,7 @@ bool CBrowseDialog2::OnSize(WPARAM /* wParam */, int xSize, int ySize)
   const int xLim = xSize - mx;
   {
     RECT r;
+    
     GetClientRectOfItem(IDT_BROWSE2_FOLDER, r);
     MoveItem(IDT_BROWSE2_FOLDER, r.left, r.top, xLim - r.left, RECT_SIZE_Y(r));
   }
@@ -1844,6 +1845,7 @@ void CBrowseDialog2::OnItemEnter()
     UString s = fullPath;
     s.Add_PathSepar();
     const HRESULT res = Reload(s, UString());
+    
     if (res != S_OK)
       MessageBox_HResError(*this, res, s);
     // SetPathEditText();

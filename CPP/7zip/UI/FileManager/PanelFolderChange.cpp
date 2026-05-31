@@ -547,6 +547,13 @@ LRESULT CPanel::OnNotifyComboBoxEnter(const UString &s)
   if (BindToPathAndRefresh(GetUnicodeString(s)) == S_OK)
   #endif
   {
+    #ifdef Z7_WINE_LINUX
+    if (!s.IsEmpty() && s[0] == L'/'){
+      _headerComboBox.SetText(NWineUtils::UnixToDosPath(_currentFolderPrefix));
+    }else{
+      _headerComboBox.SetText(_currentFolderPrefix);
+    }
+    #endif
     PostMsg(kSetFocusToListView);
     return TRUE;
   }
@@ -557,7 +564,16 @@ bool CPanel::OnNotifyComboBoxEndEdit(PNMCBEENDEDITW info, LRESULT &result)
 {
   if (info->iWhy == CBENF_ESCAPE)
   {
+    // _headerComboBox.SetText(_currentFolderPrefix);
+    #ifdef Z7_WINE_LINUX
+    if (!_currentFolderPrefix.IsEmpty() && _currentFolderPrefix[0] == L'/'){
+      _headerComboBox.SetText(NWineUtils::UnixToDosPath(_currentFolderPrefix));
+    }else{
+      _headerComboBox.SetText(_currentFolderPrefix);
+    }
+    #else
     _headerComboBox.SetText(_currentFolderPrefix);
+    #endif
     PostMsg(kSetFocusToListView);
     result = FALSE;
     return true;
@@ -576,6 +592,10 @@ bool CPanel::OnNotifyComboBoxEndEdit(PNMCBEENDEDITW info, LRESULT &result)
     // When we use Edit control and press Enter.
     UString s;
     _headerComboBox.GetText(s);
+    #ifdef Z7_WINE_LINUX
+    if (!s.IsEmpty() && s[0] == L'/')
+    s = NWineUtils::UnixToDosPath(s);
+    #endif
     result = OnNotifyComboBoxEnter(s);
     return true;
   }
@@ -588,7 +608,13 @@ bool CPanel::OnNotifyComboBoxEndEdit(PNMCBEENDEDIT info, LRESULT &result)
 {
   if (info->iWhy == CBENF_ESCAPE)
   {
-    _headerComboBox.SetText(_currentFolderPrefix);
+    #ifdef Z7_WINE_LINUX
+    if (!path.IsEmpty() && path[0] == L'/'){
+      _headerComboBox.SetText(NWineUtils::UnixToDosPath(_currentFolderPrefix));
+    }else{
+      _headerComboBox.SetText(_currentFolderPrefix);
+    }
+    #endif
     PostMsg(kSetFocusToListView);
     result = FALSE;
     return true;
@@ -605,6 +631,10 @@ bool CPanel::OnNotifyComboBoxEndEdit(PNMCBEENDEDIT info, LRESULT &result)
   {
     UString s;
     _headerComboBox.GetText(s);
+    #ifdef Z7_WINE_LINUX
+    if (!s.IsEmpty() && s[0] == L'/')
+    s = NWineUtils::UnixToDosPath(s);
+    #endif
     // GetUnicodeString(info->szText)
     result = OnNotifyComboBoxEnter(s);
     return true;
