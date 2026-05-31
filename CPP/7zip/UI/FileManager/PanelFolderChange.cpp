@@ -10,6 +10,7 @@
 #include "../../../Windows/PropVariant.h"
 
 #include "../../PropID.h"
+#include <iostream>
 
 #ifdef UNDER_CE
 #include "FSFolder.h"
@@ -23,7 +24,6 @@
 #include "ViewSettings.h"
 
 #include "resource.h"
-
 using namespace NWindows;
 using namespace NFile;
 using namespace NFind;
@@ -32,6 +32,10 @@ using namespace NFind;
 #include "../Common/WineUtils.h"
 #endif
 
+
+extern UString RootFolder_GetName_Computer(int &iconIndex);
+extern UString RootFolder_GetName_Network(int &iconIndex);
+extern UString RootFolder_GetName_Documents(int &iconIndex);
 void CPanel::ReleaseFolder()
 {
   DeleteListItems();
@@ -329,7 +333,6 @@ HRESULT CPanel::BindToPathAndRefresh(const UString &path)
   CDisableNotify disableNotify(*this);
   COpenResult openRes;
   UString s = path;
-  
   #ifdef _WIN32
     if (!s.IsEmpty() && s[0] == '\"' && s.Back() == '\"')
     {
@@ -339,8 +342,34 @@ HRESULT CPanel::BindToPathAndRefresh(const UString &path)
   #endif
 
   HRESULT res = BindToPath(s, UString(), openRes);
+
   RefreshListCtrl();
+
   return res;
+}
+
+void CPanel::UpdateWinePath(const UString &path){
+  #ifdef Z7_WINE_LINUX
+  {
+    UString displayPath;
+    if (path.IsEmpty() && _folder && IsRootFolder()) {
+      int iconIdx = -1;
+      displayPath = RootFolder_GetName_Computer(iconIdx);
+      displayPath += L'\\';
+    } else if (IsFSDrivesFolder()) {
+      // Drives list (e.g. "Computer\") — keep as-is, not a real filesystem path
+      displayPath = path;
+    } else {
+      displayPath = NWineUtils::DosToUnixPath(path);
+    }
+    UString e;
+    _currentPath = displayPath;
+    std::cout << "Setting path test:" << GetAnsiString(_currentPath.Ptr()) << std::endl;
+    std::cout << "Current folder path: "<< GetAnsiString(_currentFolderPrefix.Ptr()) << std::endl;
+    _headerComboBox.SetText(e);
+      _headerComboBox.SetText(_currentPath);
+  }
+  #endif
 }
 
 void CPanel::SetBookmark(unsigned index)
@@ -391,12 +420,6 @@ static int GetRealIconIndex_for_DirPath(CFSTR path, DWORD attrib)
   return g_Ext_to_Icon_Map.GetIconIndex_DIR(attrib);
 }
 
-
-extern UString RootFolder_GetName_Computer(int &iconIndex);
-extern UString RootFolder_GetName_Network(int &iconIndex);
-extern UString RootFolder_GetName_Documents(int &iconIndex);
-
-
 static int Find_FileExtension_DotPos_in_path(const wchar_t *path)
 {
   int dotPos = -1;
@@ -419,11 +442,7 @@ void CPanel::LoadFullPathAndShow()
   LoadFullPath();
   _appState->FolderHistory.AddString(_currentFolderPrefix);
 
-  #ifdef Z7_WINE_LINUX
-  _headerComboBox.SetText(NWineUtils::DosToUnixPath(_currentFolderPrefix));
-  #else
   _headerComboBox.SetText(_currentFolderPrefix);
-  #endif
 
   #ifndef UNDER_CE
 
@@ -526,36 +545,36 @@ void CPanel::LoadFullPathAndShow()
     item.mask |= (CBEIF_IMAGE | CBEIF_SELECTEDIMAGE);
   }
   item.iItem = -1;
-  _headerComboBox.SetItem(&item);
-  
-  #endif
 
+  _headerComboBox.SetItem(&item);
+  #endif
+  #ifdef Z7_WINE_LINUX
+    UpdateWinePath(_currentFolderPrefix);
+  #endif
   RefreshTitle();
 }
 
 #ifndef UNDER_CE
 LRESULT CPanel::OnNotifyComboBoxEnter(const UString &s)
 {
-  #ifdef Z7_WINE_LINUX
   UString path = GetUnicodeString(s);
-  // Convert Unix absolute path; BindToPath also handles it, but
-  // we do early conversion so the combo box shows the right format
+  #ifdef Z7_WINE_LINUX
+  UString newpath = path;
   if (!path.IsEmpty() && path[0] == L'/')
-    NWineUtils::UnixToDosPath(path, path);
-  if (BindToPathAndRefresh(path) == S_OK)
+    newpath = NWineUtils::UnixToDosPath(path);
+  
+  if (BindToPathAndRefresh(newpath) == S_OK)
   #else
   if (BindToPathAndRefresh(GetUnicodeString(s)) == S_OK)
   #endif
   {
-    #ifdef Z7_WINE_LINUX
-    if (!s.IsEmpty() && s[0] == L'/'){
-      _headerComboBox.SetText(NWineUtils::UnixToDosPath(_currentFolderPrefix));
-    }else{
-      _headerComboBox.SetText(_currentFolderPrefix);
-    }
-    #endif
+    std::cout << "BindToPathAndRefresh() = S_OK" << std::endl;
     PostMsg(kSetFocusToListView);
-    return TRUE;
+    #ifdef Z7_WINE_LINUX
+      return FALSE;
+    #else
+      return TRUE;
+    #endif
   }
   return FALSE;
 }
@@ -564,15 +583,10 @@ bool CPanel::OnNotifyComboBoxEndEdit(PNMCBEENDEDITW info, LRESULT &result)
 {
   if (info->iWhy == CBENF_ESCAPE)
   {
-    // _headerComboBox.SetText(_currentFolderPrefix);
     #ifdef Z7_WINE_LINUX
-    if (!_currentFolderPrefix.IsEmpty() && _currentFolderPrefix[0] == L'/'){
-      _headerComboBox.SetText(NWineUtils::UnixToDosPath(_currentFolderPrefix));
-    }else{
-      _headerComboBox.SetText(_currentFolderPrefix);
-    }
+      UpdateWinePath(_currentFolderPrefix);
     #else
-    _headerComboBox.SetText(_currentFolderPrefix);
+      _headerComboBox.SetText(_currentFolderPrefix);
     #endif
     PostMsg(kSetFocusToListView);
     result = FALSE;
@@ -592,10 +606,7 @@ bool CPanel::OnNotifyComboBoxEndEdit(PNMCBEENDEDITW info, LRESULT &result)
     // When we use Edit control and press Enter.
     UString s;
     _headerComboBox.GetText(s);
-    #ifdef Z7_WINE_LINUX
-    if (!s.IsEmpty() && s[0] == L'/')
-    s = NWineUtils::UnixToDosPath(s);
-    #endif
+    // Let OnNotifyComboBoxEnter handle Unix path conversion
     result = OnNotifyComboBoxEnter(s);
     return true;
   }
@@ -609,11 +620,9 @@ bool CPanel::OnNotifyComboBoxEndEdit(PNMCBEENDEDIT info, LRESULT &result)
   if (info->iWhy == CBENF_ESCAPE)
   {
     #ifdef Z7_WINE_LINUX
-    if (!path.IsEmpty() && path[0] == L'/'){
-      _headerComboBox.SetText(NWineUtils::UnixToDosPath(_currentFolderPrefix));
-    }else{
+      UpdateWinePath(_currentFolderPrefix);
+    #else
       _headerComboBox.SetText(_currentFolderPrefix);
-    }
     #endif
     PostMsg(kSetFocusToListView);
     result = FALSE;
@@ -631,12 +640,9 @@ bool CPanel::OnNotifyComboBoxEndEdit(PNMCBEENDEDIT info, LRESULT &result)
   {
     UString s;
     _headerComboBox.GetText(s);
-    #ifdef Z7_WINE_LINUX
-    if (!s.IsEmpty() && s[0] == L'/')
-    s = NWineUtils::UnixToDosPath(s);
-    #endif
-    // GetUnicodeString(info->szText)
+    // Let OnNotifyComboBoxEnter handle Unix path conversion
     result = OnNotifyComboBoxEnter(s);
+    UpdateWinePath(s);
     return true;
   }
   return false;
@@ -1005,6 +1011,41 @@ void CPanel::OpenParentFolder()
 
   CDisableTimerProcessing disableTimerProcessing(*this);
   CDisableNotify disableNotify(*this);
+  
+  #ifdef Z7_WINE_LINUX
+  // At filesystem boundaries, navigate to Unix parent instead of
+  // going to "My Computer" (the Windows drive list behavior).
+  if (_parentFolders.IsEmpty() && !_currentFolderPrefix.IsEmpty())
+  {
+    UString unixPath;
+    if (NWineUtils::DosToUnixPath(_currentFolderPrefix, unixPath) && unixPath.Len() > 1)
+    {
+      if (unixPath.Back() == L'/')
+        unixPath.DeleteBack();
+      const int pos = unixPath.ReverseFind_PathSepar();
+      if (pos >= 0)
+      {
+        if (parentFolderPrefix.IsEmpty())
+        {
+          focusedName = unixPath.Ptr((unsigned)(pos + 1));
+          parentFolderPrefix = unixPath.Left((unsigned)(pos + 1));
+        }
+        UString dosParent;
+        if (NWineUtils::UnixToDosPath(parentFolderPrefix, dosParent))
+        {
+          COpenResult openRes;
+          BindToPath(dosParent, UString(), openRes);
+          CSelectedState state;
+          state.FocusedName = focusedName;
+          state.FocusedName_Defined = true;
+          LoadFullPath();
+          RefreshListCtrl(state);
+          return;
+        }
+      }
+    }
+  }
+  #endif
   
   CMyComPtr<IFolderFolder> newFolder;
   _folder->BindToParentFolder(&newFolder);

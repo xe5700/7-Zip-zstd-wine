@@ -454,7 +454,7 @@ public:
   CSelectedState _selectedState;
 
   UString _currentFolderPrefix;
-  
+  UString _currentPath;
   CObjectVector<CFolderLink> _parentFolders;
   NWindows::NDLL::CLibrary _library;
   
@@ -571,6 +571,7 @@ public:
   void SetToRootFolder();
   HRESULT BindToPath(const UString &fullPath, const UString &arcFormat, COpenResult &openRes); // can be prefix
   HRESULT BindToPathAndRefresh(const UString &path);
+  void UpdateWinePath(const UString &path);
   void OpenDrivesFolder();
   
   void SetBookmark(unsigned index);

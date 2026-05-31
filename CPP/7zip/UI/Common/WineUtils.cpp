@@ -63,26 +63,83 @@ bool IsWine()
   return g_isWine;
 }
 
+static void FallbackUnixToDosPath(const UString &unixPath, UString &dosPath)
+{
+  if (unixPath.IsEmpty())
+  {
+    dosPath.Empty();
+    return;
+  }
+
+  if (unixPath[0] == L'/')
+  {
+    dosPath = L"Z:" + unixPath;
+    dosPath.Replace(L'/', L'\\');
+    return;
+  }
+
+  // Already in DOS format or unknown format
+  dosPath = unixPath;
+}
+
 bool DosToUnixPath(const UString &dosPath, UString &unixPath)
 {
   unixPath.Empty();
   InitWineFunctions();
 
-  if (!g_isWine || !g_wine_get_unix_file_name)
-    return false;
+  if (dosPath.Len() >= 2 && dosPath[1] == L':')
+  {
+    // Path has drive prefix (e.g. "G:\...").
+    // Use drive root approach: resolve just the drive root via Wine API,
+    // then manually append the rest. This avoids symlink/mount resolution
+    // issues that can occur when Wine resolves the full path.
+    UString unixPrefix;
+    if (g_isWine && g_wine_get_unix_file_name)
+    {
+      UString driveRoot = UString(dosPath[0]) + L":\\";
+      char *unixStr = g_wine_get_unix_file_name(driveRoot);
+      if (unixStr)
+      {
+        unixPrefix = MultiByteToUnicodeString(unixStr, CP_UTF8);
+        HANDLE heap = ::GetProcessHeap();
+        if (heap)
+          ::HeapFree(heap, 0, unixStr);
+      }
+    }
+    if (unixPrefix.IsEmpty())
+    {
+      if (dosPath[0] == L'Z' || dosPath[0] == L'z')
+        unixPrefix = L"/";
+      else
+        unixPrefix = L"/" + UString(dosPath[0]) + L"/";
+    }
+    if (!unixPrefix.IsEmpty() && unixPrefix.Back() == L'/')
+      unixPrefix.DeleteBack();
+    unixPath = unixPrefix;
+    UString rest = dosPath.Ptr(2);
+    rest.Replace(L'\\', L'/');
+    unixPath += rest;
+    return !unixPath.IsEmpty();
+  }
 
-  char *unixStr = g_wine_get_unix_file_name(dosPath);
-  if (!unixStr)
-    return false;
+  // No drive prefix. Try Wine API on the full path.
+  if (g_isWine && g_wine_get_unix_file_name)
+  {
+    char *unixStr = g_wine_get_unix_file_name(dosPath);
+    if (unixStr)
+    {
+      unixPath = MultiByteToUnicodeString(unixStr, CP_UTF8);
+      HANDLE heap = ::GetProcessHeap();
+      if (heap)
+        ::HeapFree(heap, 0, unixStr);
+      if (!unixPath.IsEmpty())
+        return true;
+    }
+  }
 
-  // Convert UTF-8 Unix path to UString
-  unixPath = MultiByteToUnicodeString(unixStr, CP_UTF8);
-
-  // Free the buffer allocated by Wine (HeapAlloc on process heap)
-  HANDLE heap = ::GetProcessHeap();
-  if (heap)
-    ::HeapFree(heap, 0, unixStr);
-
+  // Fallback: just replace backslashes
+  unixPath = dosPath;
+  unixPath.Replace(L'\\', L'/');
   return !unixPath.IsEmpty();
 }
 
@@ -91,23 +148,28 @@ bool UnixToDosPath(const UString &unixPath, UString &dosPath)
   dosPath.Empty();
   InitWineFunctions();
 
-  if (!g_isWine || !g_wine_get_dos_file_name)
-    return false;
+  if (g_isWine && g_wine_get_dos_file_name)
+  {
+    // Convert UString to UTF-8 for Wine API
+    AString unixPathUtf8 = UnicodeStringToMultiByte(unixPath, CP_UTF8);
 
-  // Convert UString to UTF-8 for Wine API
-  AString unixPathUtf8 = UnicodeStringToMultiByte(unixPath, CP_UTF8);
+    WCHAR *dosStr = g_wine_get_dos_file_name(unixPathUtf8);
+    if (dosStr)
+    {
+      dosPath = dosStr;
 
-  WCHAR *dosStr = g_wine_get_dos_file_name(unixPathUtf8);
-  if (!dosStr)
-    return false;
+      // Free the buffer allocated by Wine
+      HANDLE heap = ::GetProcessHeap();
+      if (heap)
+        ::HeapFree(heap, 0, dosStr);
 
-  dosPath = dosStr;
+      if (!dosPath.IsEmpty())
+        return true;
+    }
+  }
 
-  // Free the buffer allocated by Wine
-  HANDLE heap = ::GetProcessHeap();
-  if (heap)
-    ::HeapFree(heap, 0, dosStr);
-
+  // Fallback: do simple string conversion
+  FallbackUnixToDosPath(unixPath, dosPath);
   return !dosPath.IsEmpty();
 }
 

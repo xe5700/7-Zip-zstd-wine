@@ -1031,6 +1031,9 @@ void CApp::RefreshTitle(bool always)
   if (!always && path == PrevTitle)
     return;
   PrevTitle = path;
+  #ifdef Z7_WINE_LINUX
+  
+  #endif
   NWindows::MySetWindowText(_window, path);
 }
 
