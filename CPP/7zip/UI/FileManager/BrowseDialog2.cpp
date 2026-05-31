@@ -44,6 +44,10 @@
 #include "BrowseDialog2Res.h"
 #include "BrowseDialog2.h"
 
+#ifdef Z7_WINE_LINUX
+#include "../Common/WineUtils.h"
+#endif
+
 using namespace NWindows;
 using namespace NFile;
 using namespace NName;
@@ -1595,7 +1599,11 @@ HRESULT CBrowseDialog2::Reload(const UString &pathPrefix, const UStringVector &s
 
   EnableItem(IDB_BROWSE2_PARENT, !IsExactTempFolder(pathPrefix));
 
+  #ifdef Z7_WINE_LINUX
+  SetItemText(IDT_BROWSE2_FOLDER, NWineUtils::DosToUnixPath(DirPrefix));
+  #else
   SetItemText(IDT_BROWSE2_FOLDER, DirPrefix);
+  #endif
 
   _list.SetRedraw(false);
   _list.DeleteAllItems();

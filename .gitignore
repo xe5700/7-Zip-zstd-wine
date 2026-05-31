@@ -1,15 +1,46 @@
+# Build output directory
+build/
 
+# Object files
 *.obj
+*.o
+
+# Executables and libraries
 *.exe
-*.res
 *.dll
-*.pch
-*.exp
-*.lib
+*.so
 *.sfx
 
-# Folders
-*.vscode
+# Resource files
+*.res
+*.rc.o
+
+# Precompiled headers
+*.pch
+*.gch
+
+# Library/build artifacts
+*.exp
+*.lib
+*.a
+*.la
+
+# Editor/IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Platform-specific binary directories
 **/x86-bin
 **/x64-bin
 **/arm64-bin
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+!CPP/7zip/Bundles/*/makefile
+!CPP/7zip/UI/*/makefile

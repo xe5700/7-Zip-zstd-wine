@@ -62,6 +62,10 @@ using namespace NFind;
 using namespace NDir;
 using namespace NName;
 
+#ifdef Z7_WINE_LINUX
+#include "../Common/WineUtils.h"
+#endif
+
 #ifndef USE_UNICODE_FSTRING
 int CompareFileNames_ForFolderList(const FChar *s1, const FChar *s2);
 int CompareFileNames_ForFolderList(const FChar *s1, const FChar *s2)

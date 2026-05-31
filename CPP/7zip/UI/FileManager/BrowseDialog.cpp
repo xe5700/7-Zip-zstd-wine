@@ -20,6 +20,10 @@
 
 #include "BrowseDialog.h"
 
+#ifdef Z7_WINE_LINUX
+#include "../Common/WineUtils.h"
+#endif
+
 #define USE_MY_BROWSE_DIALOG
 
 #ifdef USE_MY_BROWSE_DIALOG
@@ -641,7 +645,11 @@ HRESULT CBrowseDialog::Reload(const UString &pathPrefix, const UString &selected
 
   _files = files;
 
+  #ifdef Z7_WINE_LINUX
+  SetItemText(IDT_BROWSE_FOLDER, NWineUtils::DosToUnixPath(DirPrefix));
+  #else
   SetItemText(IDT_BROWSE_FOLDER, DirPrefix);
+  #endif
 
   _list.SetRedraw(false);
   _list.DeleteAllItems();
@@ -762,7 +770,11 @@ void CBrowseDialog::SetPathEditText()
   if (index < 0)
   {
     if (FolderMode)
+      #ifdef Z7_WINE_LINUX
+      _pathEdit.SetText(NWineUtils::DosToUnixPath(DirPrefix));
+      #else
       _pathEdit.SetText(DirPrefix);
+      #endif
     return;
   }
   const int fileIndex = GetRealItemIndex(index);
@@ -853,6 +865,16 @@ void CBrowseDialog::FinishOnOK()
 {
   UString s;
   _pathEdit.GetText(s);
+  #ifdef Z7_WINE_LINUX
+  // Convert Unix absolute path to Windows before internal processing
+  if (!s.IsEmpty() && s[0] == L'/')
+  {
+    if (NWineUtils::UnixToDosPath(s, s))
+    {
+      // path is now in Windows format, continue normally
+    }
+  }
+  #endif
   FString destPath;
   if (!GetFullPath(us2fs(DirPrefix), us2fs(s), destPath))
   {
@@ -891,7 +913,15 @@ bool MyBrowseForFolder(HWND owner, LPCWSTR title, LPCWSTR path, UString &resultP
   if (title)
     dialog.Title = title;
   if (path)
-    dialog.FilePath = path;
+  {
+    #ifdef Z7_WINE_LINUX
+    UString p = path;
+    if (!p.IsEmpty() && p[0] == L'/')
+      NWineUtils::UnixToDosPath(p, dialog.FilePath);
+    else
+    #endif
+      dialog.FilePath = path;
+  }
   if (dialog.Create(owner) != IDOK)
     return false;
   resultPath = dialog.FilePath;
@@ -990,7 +1020,17 @@ bool CBrowseInfo::BrowseForFile(const CObjectVector<CBrowseFilterInfo> &filters)
 
   if (lpstrTitle)
     dialog.Title = lpstrTitle;
+  #ifdef Z7_WINE_LINUX
+  {
+    UString tmpPath = FilePath;
+    if (!tmpPath.IsEmpty() && tmpPath[0] == L'/')
+      NWineUtils::UnixToDosPath(tmpPath, dialog.FilePath);
+    else
+      dialog.FilePath = FilePath;
+  }
+  #else
   dialog.FilePath = FilePath;
+  #endif
   if (dialog.Create(hwndOwner) != IDOK)
     return false;
   FilePath = dialog.FilePath;

@@ -28,6 +28,10 @@ using namespace NWindows;
 using namespace NFile;
 using namespace NFind;
 
+#ifdef Z7_WINE_LINUX
+#include "../Common/WineUtils.h"
+#endif
+
 void CPanel::ReleaseFolder()
 {
   DeleteListItems();
@@ -76,6 +80,13 @@ static bool DoesNameContainWildcard_SkipRoot(const UString &path)
 HRESULT CPanel::BindToPath(const UString &fullPath, const UString &arcFormat, COpenResult &openRes)
 {
   UString path = fullPath;
+  #ifdef Z7_WINE_LINUX
+  // Convert Unix absolute path to Windows before processing
+  if (!path.IsEmpty() && path[0] == L'/')
+  {
+    NWineUtils::UnixToDosPath(path, path);
+  }
+  #endif
   #ifdef _WIN32
   path.Replace(L'/', WCHAR_PATH_SEPARATOR);
   #endif
@@ -408,7 +419,11 @@ void CPanel::LoadFullPathAndShow()
   LoadFullPath();
   _appState->FolderHistory.AddString(_currentFolderPrefix);
 
+  #ifdef Z7_WINE_LINUX
+  _headerComboBox.SetText(NWineUtils::DosToUnixPath(_currentFolderPrefix));
+  #else
   _headerComboBox.SetText(_currentFolderPrefix);
+  #endif
 
   #ifndef UNDER_CE
 
@@ -521,7 +536,16 @@ void CPanel::LoadFullPathAndShow()
 #ifndef UNDER_CE
 LRESULT CPanel::OnNotifyComboBoxEnter(const UString &s)
 {
+  #ifdef Z7_WINE_LINUX
+  UString path = GetUnicodeString(s);
+  // Convert Unix absolute path; BindToPath also handles it, but
+  // we do early conversion so the combo box shows the right format
+  if (!path.IsEmpty() && path[0] == L'/')
+    NWineUtils::UnixToDosPath(path, path);
+  if (BindToPathAndRefresh(path) == S_OK)
+  #else
   if (BindToPathAndRefresh(GetUnicodeString(s)) == S_OK)
+  #endif
   {
     PostMsg(kSetFocusToListView);
     return TRUE;

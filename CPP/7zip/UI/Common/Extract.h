@@ -101,7 +101,7 @@ HRESULT Extract(
     IExtractCallbackUI *extractCallback,
     IFolderArchiveExtractCallback *faeCallback,
     #ifndef Z7_SFX
-    IHashCalc *hash,
+      IHashCalc *hash,
     #endif
     UString &errorMessage,
     CDecompressStat &st);
